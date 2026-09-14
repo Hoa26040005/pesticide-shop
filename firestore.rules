@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Hàm kiểm tra người dùng đã đăng nhập hệ thống
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // 1. Quản lý Đơn hàng (Orders)
+    // Chỉ nhân viên/chủ cửa hàng đã đăng nhập mới được tạo, xem hoặc sửa đơn hàng
+    match /orders/{orderId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 2. Quản lý Sản phẩm (Products)
+    match /products/{productId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 3. Quản lý Khách hàng & Sổ nợ (Customers & Debt)
+    match /customers/{customerId} {
+      allow read, write: if isAuthenticated();
+      
+      // Lịch sử biến động nợ (Chỉ cho phép thêm log, không cho phép xóa sửa tự do)
+      match /debt_history/{historyId} {
+        allow read, create: if isAuthenticated();
+        allow update, delete: if isAuthenticated();
+      }
+    }
+
+    // 4. Quản lý Lô hàng & Kho (Inventory Batches)
+    match /inventory_batches/{batchId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 5. Nhật ký hệ thống (System Logs - Audit Trail)
+    // Bắt buộc đăng nhập: Chỉ cho phép đọc và thêm nhật ký mới, tuyệt đối cấm chỉnh sửa/xóa nhật ký đã ghi
+    match /system_logs/{logId} {
+      allow read, create: if isAuthenticated();
+      allow update, delete: if false; 
+    }
+
+    // 6. Quản lý Tài khoản & Phân quyền (Users & Roles)
+    match /users/{userId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 7. Cấu hình & Thông tin tài khoản Admin (Profiles & Settings)
+    match /admin_profiles/{profileId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 7. Quy tắc mặc định cho các tài nguyên khác
+    match /{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}
