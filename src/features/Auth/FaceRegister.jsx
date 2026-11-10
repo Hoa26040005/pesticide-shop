@@ -18,6 +18,12 @@ const FaceRegister = ({ onCancel, onSuccess }) => {
     return new File([u8arr], filename, {type:mime});
   }
 
+  const videoConstraints = {
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    facingMode: "user"
+  };
+
   const handleRegister = async () => {
     // --- BƯỚC BẢO MẬT: KIỂM TRA XEM ĐÃ ĐĂNG NHẬP CHƯA ---
     const auth = getAuth();
@@ -25,11 +31,11 @@ const FaceRegister = ({ onCancel, onSuccess }) => {
 
     if (!currentUser) {
       message.error("Bảo mật: Bạn phải đăng nhập bằng mật khẩu trước khi đăng ký Face ID!");
-      return; // Chặn đứng ngay lập tức, không cho làm bước tiếp theo
+      return;
     }
 
     setLoading(true);
-    const imageSrc = webcamRef.current.getScreenshot();
+    const imageSrc = webcamRef.current?.getScreenshot();
 
     if (!imageSrc) {
       message.error("Lỗi Camera!");
@@ -42,7 +48,7 @@ const FaceRegister = ({ onCancel, onSuccess }) => {
       const formData = new FormData();
       formData.append("file", file);
       
-      // --- ĐÃ SỬA: Lấy chính xác Email của người đang đăng nhập ---
+      // Gắn Email của người đang đăng nhập
       formData.append("email", currentUser.email); 
 
       const response = await fetch("https://hoa2604205-nhan-dien-khuon-mat.hf.space/register", {
@@ -73,32 +79,85 @@ const FaceRegister = ({ onCancel, onSuccess }) => {
   return (
     <div style={{ textAlign: 'center' }}>
       <Alert 
-        title="Bảo mật Đám mây" 
-        description="Khuôn mặt sẽ được mã hóa và gắn chặt với Email bạn đang đăng nhập." 
+        title="🌸 Đăng ký nhận diện khuôn mặt Face ID" 
+        description="Khuôn mặt được trích xuất vector 128 chiều và mã hóa lưu trên Cloud gắn với tài khoản của bạn." 
         type="info" 
         showIcon 
-        style={{ marginBottom: 20, textAlign: 'left' }} 
+        style={{ 
+          marginBottom: 18, 
+          textAlign: 'left', 
+          borderRadius: 12,
+          background: 'rgba(251, 113, 133, 0.08)',
+          border: '1px solid rgba(251, 113, 133, 0.25)',
+        }} 
       />
-      <div style={{ marginBottom: 20, border: '2px solid #52c41a', borderRadius: 8, overflow: 'hidden' }}>
+      
+      {/* KHUNG CAMERA VỚI KHUNG OVAL ĐỊNH VỊ SAKURA */}
+      <div style={{ 
+        position: 'relative', 
+        marginBottom: 20, 
+        borderRadius: 16, 
+        overflow: 'hidden', 
+        background: '#09040c',
+        border: '2px solid #fb7185',
+        boxShadow: '0 8px 30px rgba(251, 113, 133, 0.25)',
+      }}>
         <Webcam
           audio={false}
           ref={webcamRef}
           screenshotFormat="image/jpeg"
+          screenshotQuality={1}
           width="100%"
-          videoConstraints={{ facingMode: "user" }}
+          videoConstraints={videoConstraints}
         />
+        {/* Vòng Oval hướng dẫn đặt mặt vào giữa */}
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '180px',
+          height: '230px',
+          borderRadius: '50%',
+          border: '2px dashed rgba(253, 164, 175, 0.9)',
+          boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.4)',
+          pointerEvents: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <span style={{ 
+            position: 'absolute', 
+            bottom: 12, 
+            fontSize: 11, 
+            color: '#fda4af', 
+            fontWeight: 700,
+            textShadow: '0 1px 4px rgba(0,0,0,0.9)' 
+          }}>
+            🌸 Đặt mặt thẳng vào khung
+          </span>
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-        <Button onClick={onCancel} size="large">Hủy bỏ</Button>
+
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+        <Button onClick={onCancel} size="large" style={{ borderRadius: 12, minWidth: 100 }}>
+          Hủy bỏ
+        </Button>
         <Button 
           type="primary" 
           size="large" 
           icon={<CameraOutlined />} 
           onClick={handleRegister} 
           loading={loading}
-          style={{ background: '#52c41a', borderColor: '#52c41a' }}
+          style={{ 
+            borderRadius: 12,
+            background: 'linear-gradient(135deg, #e11d48 0%, #f43f5e 50%, #fb7185 100%)', 
+            border: 'none',
+            fontWeight: 700,
+            boxShadow: '0 6px 18px rgba(244, 63, 94, 0.4)',
+          }}
         >
-          {loading ? 'Đang tải lên mây...' : 'Chụp & Đăng ký Face ID'}
+          {loading ? 'Đang trích xuất & lưu Cloud...' : '🌸 Chụp & Đăng ký Face ID'}
         </Button>
       </div>
     </div>

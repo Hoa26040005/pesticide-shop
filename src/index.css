@@ -1,0 +1,178 @@
+/* src/index.css */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --primary: #059669;
+  --primary-hover: #047857;
+  --primary-light: #ecfdf5;
+  --forest-dark: #071c16;
+  --forest-surface: #0e2921;
+  --forest-border: rgba(16, 185, 129, 0.15);
+  --bg-canvas: #f6f8f7;
+  --card-bg: #ffffff;
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --card-border: rgba(5, 150, 105, 0.09);
+  --card-shadow: 0 4px 20px -2px rgba(7, 28, 22, 0.05), 0 1px 4px -1px rgba(7, 28, 22, 0.02);
+  --card-shadow-hover: 0 12px 28px -4px rgba(7, 28, 22, 0.09), 0 4px 12px -2px rgba(7, 28, 22, 0.03);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--bg-canvas);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  line-height: 1.5;
+}
+
+/* Số liệu và bảng biểu luôn thẳng hàng */
+.tabular-nums, 
+.ant-statistic-content-value, 
+.ant-table td, 
+.ant-typography strong, 
+.ant-input-number {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Thanh cuộn siêu mượt cao cấp */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(5, 150, 105, 0.2);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(5, 150, 105, 0.4);
+}
+
+/* Ant Design Global Overrides */
+.ant-layout {
+  background-color: var(--bg-canvas) !important;
+}
+
+/* Sider Menu Style */
+.agri-sider {
+  background: var(--forest-dark) !important;
+  border-right: 1px solid var(--forest-border) !important;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12) !important;
+}
+
+.agri-sider .ant-menu {
+  background: transparent !important;
+  padding: 0 8px;
+}
+
+.agri-sider .ant-menu-item {
+  border-radius: 8px !important;
+  margin-bottom: 4px !important;
+  color: #94a3b8 !important;
+  font-weight: 500 !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.agri-sider .ant-menu-item:hover {
+  color: #ffffff !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+}
+
+.agri-sider .ant-menu-item-selected {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35) !important;
+}
+
+/* Header Style */
+.agri-header {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(12px) !important;
+  border-bottom: 1px solid rgba(5, 150, 105, 0.08) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+}
+
+/* Bento Card Style */
+.bento-card {
+  background: #ffffff;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.bento-card:hover {
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-2px);
+  border-color: rgba(5, 150, 105, 0.2);
+}
+
+.bento-icon-wrapper {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+
+/* Bảng biểu hiện đại */
+.ant-table-wrapper .ant-table {
+  border-radius: 10px !important;
+  overflow: hidden;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th {
+  background: #f8faf9 !important;
+  color: #374151 !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  border-bottom: 1px solid rgba(5, 150, 105, 0.1) !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:hover > td {
+  background: #f0fdf4 !important;
+}
+
+/* Button & Badge Polish */
+.ant-btn {
+  font-weight: 500 !important;
+  box-shadow: none !important;
+  transition: all 0.2s ease !important;
+}
+
+.ant-btn-primary {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25) !important;
+}
+
+.ant-btn-primary:hover {
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%) !important;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4) !important;
+}
+
+.ant-tag {
+  border-radius: 6px !important;
+  font-weight: 500 !important;
+  padding: 2px 8px !important;
+}

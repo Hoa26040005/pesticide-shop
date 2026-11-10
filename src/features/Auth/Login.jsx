@@ -1,39 +1,74 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Form, Input, Button, Typography, message, Divider } from 'antd';
-import { UserOutlined, LockOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { Card, Form, Input, Button, Typography, message, Divider, Tabs } from 'antd';
+import { 
+  UserOutlined, LockOutlined, MailOutlined,
+  SmileOutlined, CheckCircleOutlined 
+} from '@ant-design/icons';
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  updateProfile 
+} from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 import LoginWithFace from './LoginWithFace';
+import SakuraCanvas from './SakuraCanvas';
 
 const { Title, Text } = Typography;
 
 const Login = () => {
+  const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
   const [loading, setLoading] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [cardTilt, setCardTilt] = useState({ rx: 0, ry: 0, glareX: 50, glareY: 50 });
   const containerRef = useRef(null);
 
-  // --- CÁC STATE BẢO MẬT MỚI THÊM ---
+  // State bảo mật khóa tạm thời
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
-  // Hiệu ứng đếm ngược khi bị khóa
+  // Forms
+  const [loginForm] = Form.useForm();
+  const [registerForm] = Form.useForm();
+
+  // Đếm ngược khóa
   useEffect(() => {
     let timer;
     if (isLocked && countdown > 0) {
-      timer = setInterval(() => {
-        setCountdown((prev) => prev - 1);
-      }, 1000);
+      timer = setInterval(() => setCountdown((prev) => prev - 1), 1000);
     } else if (isLocked && countdown === 0) {
       setIsLocked(false);
-      setFailedAttempts(0); // Reset số lần sai khi hết thời gian phạt
+      setFailedAttempts(0);
     }
     return () => clearInterval(timer);
   }, [isLocked, countdown]);
 
-  const onFinish = async (values) => {
-    // Chặn ngay nếu đang bị khóa
+  // Mouse 3D perspective tracking
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      const { innerWidth, innerHeight } = window;
+      const x = (e.clientX / innerWidth) - 0.5;
+      const y = (e.clientY / innerHeight) - 0.5;
+      setMousePos({ x, y });
+
+      // 3D Tilt calculation
+      const rx = (-y * 14).toFixed(2);
+      const ry = (x * 14).toFixed(2);
+      const glareX = Math.round(50 + x * 50);
+      const glareY = Math.round(50 + y * 50);
+      setCardTilt({ rx, ry, glareX, glareY });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  // Xử lý Đăng nhập
+  const onLogin = async (values) => {
     if (isLocked) {
-      message.warning(`Hệ thống đang khóa tạm thời. Vui lòng thử lại sau ${countdown}s.`);
+      message.warning(`Hệ thống tạm khóa bảo mật. Thử lại sau ${countdown}s!`);
       return;
     }
 
@@ -41,15 +76,12 @@ const Login = () => {
     try {
       const auth = getAuth();
       await signInWithEmailAndPassword(auth, values.email, values.password);
-      
-      message.success('Đăng nhập thành công!');
-      setFailedAttempts(0); // Đăng nhập đúng thì reset số lần sai
-      
+      message.success('🌸 Chào mừng bạn trở lại! Đăng nhập thành công.');
+      setFailedAttempts(0);
     } catch (error) {
       console.error('Login error:', error.code);
-      let errorMsg = 'Lỗi hệ thống. Vui lòng thử lại sau!';
+      let errorMsg = 'Lỗi đăng nhập hệ thống!';
 
-      // --- BẮT CHÍNH XÁC TỪNG LỖI CỦA FIREBASE ---
       switch (error.code) {
         case 'auth/user-not-found':
           errorMsg = 'Email này chưa được đăng ký trong hệ thống!';
@@ -58,75 +90,160 @@ const Login = () => {
           errorMsg = 'Mật khẩu không chính xác!';
           break;
         case 'auth/invalid-credential':
-          errorMsg = 'Thông tin đăng nhập không chính xác (Sai Email hoặc Mật khẩu)!';
+          errorMsg = 'Email hoặc mật khẩu không chính xác!';
           break;
         case 'auth/too-many-requests':
-          errorMsg = 'Tài khoản tạm khóa do nhập sai quá nhiều lần từ hệ thống gốc!';
+          errorMsg = 'Tài khoản tạm khóa do nhập sai quá nhiều lần!';
           break;
         case 'auth/invalid-email':
           errorMsg = 'Định dạng email không hợp lệ!';
           break;
         default:
-          errorMsg = `Lỗi đăng nhập: ${error.message}`;
+          errorMsg = `Lỗi: ${error.message}`;
       }
 
       message.error(errorMsg);
-
-      // --- TĂNG BẢO MẬT: XỬ LÝ KHÓA TẠM THỜI ---
       const newAttempts = failedAttempts + 1;
       setFailedAttempts(newAttempts);
 
       if (newAttempts >= 3) {
         setIsLocked(true);
-        setCountdown(30); // Khóa 30 giây
-        message.error('Phát hiện đăng nhập bất thường! Tạm khóa chức năng 30 giây để bảo mật.');
+        setCountdown(30);
+        message.error('Phát hiện 3 lần đăng nhập thất bại. Tạm khóa 30 giây!');
       }
-
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (containerRef.current) {
-        const { left, top, width, height } = containerRef.current.getBoundingClientRect();
-        const x = (e.clientX - left) / width - 0.5;
-        const y = (e.clientY - top) / height - 0.5;
-        setMousePos({ x, y });
+  // Xử lý Đăng ký tài khoản
+  const onRegister = async (values) => {
+    setLoading(true);
+    try {
+      const auth = getAuth();
+      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+      const user = userCredential.user;
+
+      // Cập nhật tên hiển thị
+      if (values.displayName) {
+        await updateProfile(user, { displayName: values.displayName });
       }
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
+
+      // Lưu thông tin người dùng vào Firestore
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          displayName: values.displayName || values.email.split('@')[0],
+          email: values.email,
+          role: 'staff',
+          createdAt: new Date(),
+        });
+      } catch (err) {
+        console.warn('Could not write user profile to firestore:', err);
+      }
+
+      message.success('🌸 Đăng ký tài khoản thành công! Tự động đăng nhập.');
+    } catch (error) {
+      console.error('Register error:', error);
+      let errorMsg = 'Lỗi đăng ký tài khoản!';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMsg = 'Email này đã được sử dụng bởi một tài khoản khác!';
+      } else if (error.code === 'auth/weak-password') {
+        errorMsg = 'Mật khẩu quá ngắn. Vui lòng nhập tối thiểu 6 ký tự!';
+      }
+      message.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const customStyles = `
-    @keyframes galaxyDrift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    @keyframes fishSwim { 0% { transform: translateY(0px); } 50% { transform: translateY(5px); } 100% { transform: translateY(0px); } }
-    @keyframes tailWag { 0% { transform: rotate(-5deg); } 100% { transform: rotate(5deg); } }
-    @keyframes finWave { 0% { transform: scaleX(1); } 100% { transform: scaleX(0.8); } }
-    
-    .glass-card {
-      background: rgba(10, 20, 30, 0.5) !important;
-      backdrop-filter: blur(12px) !important;
-      border: 1px solid rgba(255, 255, 255, 0.1) !important;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 242, 254, 0.2) inset, 0 0 30px rgba(123, 47, 247, 0.2) !important;
+    @keyframes sakuraFloat {
+      0% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-8px) rotate(2deg); }
+      100% { transform: translateY(0px) rotate(0deg); }
     }
-    .glass-input .ant-input-affix-wrapper,
-    .glass-input .ant-input {
-      background: rgba(0, 0, 0, 0.3) !important;
-      color: white !important;
-      border: 1px solid rgba(255, 255, 255, 0.15) !important;
-      backdrop-filter: blur(5px);
-      transition: all 0.3s ease;
+
+    @keyframes branchSway {
+      0% { transform: rotate(0deg) scale(1); }
+      50% { transform: rotate(1.5deg) scale(1.02); }
+      100% { transform: rotate(0deg) scale(1); }
     }
-    .glass-input .ant-input-affix-wrapper:hover,
-    .glass-input .ant-input-affix-wrapper-focused {
-      border-color: #00f2fe !important;
-      box-shadow: 0 0 12px rgba(0, 242, 254, 0.4) !important;
+
+    .sakura-card-wrapper {
+      perspective: 1200px;
+      z-index: 10;
     }
-    .glass-input .anticon { color: #00f2fe !important; }
+
+    .sakura-3d-card {
+      background: rgba(26, 12, 24, 0.78) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border: 1px solid rgba(251, 113, 133, 0.3) !important;
+      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.65), 
+                  0 0 40px rgba(244, 114, 182, 0.22), 
+                  0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+      transition: transform 0.12s ease-out, box-shadow 0.2s ease;
+      transform-style: preserve-3d;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sakura-glare {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      border-radius: inherit;
+      mix-blend-mode: overlay;
+      opacity: 0.65;
+      transition: background 0.1s ease-out;
+    }
+
+    .sakura-input .ant-input-affix-wrapper,
+    .sakura-input .ant-input {
+      background: rgba(18, 7, 16, 0.65) !important;
+      color: #ffffff !important;
+      border: 1px solid rgba(251, 113, 133, 0.25) !important;
+      backdrop-filter: blur(10px);
+      transition: all 0.25s ease;
+    }
+
+    .sakura-input .ant-input::placeholder {
+      color: #9f8a97 !important;
+    }
+
+    .sakura-input .ant-input-affix-wrapper:hover,
+    .sakura-input .ant-input-affix-wrapper-focused {
+      border-color: #fb7185 !important;
+      box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.25) !important;
+    }
+
+    .sakura-input .anticon { 
+      color: #fb7185 !important; 
+    }
+
+    .sakura-tabs .ant-tabs-nav {
+      margin-bottom: 20px !important;
+    }
+
+    .sakura-tabs .ant-tabs-tab {
+      color: #d1b8c6 !important;
+      font-weight: 600 !important;
+      font-size: 15px !important;
+    }
+
+    .sakura-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+      color: #fda4af !important;
+      text-shadow: 0 0 12px rgba(251, 113, 133, 0.6) !important;
+    }
+
+    .sakura-tabs .ant-tabs-ink-bar {
+      background: linear-gradient(90deg, #f43f5e, #fb7185) !important;
+      height: 3px !important;
+      border-radius: 3px !important;
+    }
   `;
 
   return (
@@ -140,99 +257,291 @@ const Login = () => {
           justifyContent: 'center',
           alignItems: 'center',
           minHeight: '100vh',
-          background: 'radial-gradient(ellipse at 30% 40%, #0d0b1a, #020210)',
+          background: 'radial-gradient(ellipse at 50% 20%, #38122d 0%, #1c0a1b 45%, #09030c 100%)',
           overflow: 'hidden',
         }}
       >
-        <div style={{ position: 'absolute', width: '100%', height: '100%', transform: `translate(${mousePos.x * -15}px, ${mousePos.y * -15}px)`, transition: 'transform 0.2s ease-out', pointerEvents: 'none', zIndex: 1 }}>
-          {[...Array(50)].map((_, i) => (
-            <div key={i} style={{ position: 'absolute', width: Math.random() * 2 + 1 + 'px', height: Math.random() * 2 + 1 + 'px', background: 'white', borderRadius: '50%', left: Math.random() * 100 + '%', top: Math.random() * 100 + '%', opacity: Math.random() * 0.5 + 0.3, boxShadow: '0 0 6px rgba(255,255,255,0.8)' }} />
-          ))}
+        {/* 3D INTERACTIVE SAKURA CANVAS */}
+        <SakuraCanvas />
+
+        {/* ARTISTIC CHERRY BLOSSOM BRANCH SILHOUETTE IN BACKGROUND */}
+        <div style={{
+          position: 'absolute',
+          top: '-60px',
+          right: '-40px',
+          width: '580px',
+          height: '580px',
+          pointerEvents: 'none',
+          opacity: 0.22,
+          animation: 'branchSway 8s ease-in-out infinite',
+          zIndex: 1,
+        }}>
+          <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+            {/* Elegant Cherry Blossom Branch */}
+            <path d="M500 0 C420 80, 380 140, 260 200 C180 240, 110 260, 0 280 C60 260, 150 220, 210 180 C320 110, 410 40, 500 0 Z" fill="#fda4af" />
+            <path d="M380 140 C340 180, 310 240, 290 320" stroke="#fda4af" strokeWidth="4" strokeLinecap="round" />
+            <path d="M260 200 C240 260, 190 310, 130 360" stroke="#fda4af" strokeWidth="3" strokeLinecap="round" />
+            {/* Sakura Blossom Clusters */}
+            <circle cx="290" cy="320" r="14" fill="#fb7185" />
+            <circle cx="280" cy="310" r="12" fill="#fda4af" />
+            <circle cx="305" cy="315" r="11" fill="#f43f5e" />
+            <circle cx="130" cy="360" r="16" fill="#fb7185" />
+            <circle cx="115" cy="350" r="13" fill="#fbcfe8" />
+            <circle cx="145" cy="355" r="12" fill="#f43f5e" />
+            <circle cx="340" cy="180" r="18" fill="#fda4af" />
+            <circle cx="210" cy="180" r="17" fill="#fb7185" />
+          </svg>
         </div>
 
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '800px', height: '800px', borderRadius: '50%', border: '2px solid rgba(0, 242, 254, 0.3)', boxShadow: '0 0 40px rgba(0, 242, 254, 0.2), inset 0 0 20px rgba(123, 47, 247, 0.3)', animation: 'spin 40s linear infinite', zIndex: 2 }} />
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '600px', height: '600px', borderRadius: '50%', border: '2px solid rgba(123, 47, 247, 0.3)', boxShadow: '0 0 40px rgba(123, 47, 247, 0.2), inset 0 0 20px rgba(0, 242, 254, 0.3)', animation: 'spin 30s linear infinite reverse', zIndex: 2 }} />
+        {/* 3D TILT CARD WRAPPER */}
+        <div 
+          className="sakura-card-wrapper"
+          style={{
+            transform: `perspective(1200px) rotateX(${cardTilt.rx}deg) rotateY(${cardTilt.ry}deg)`,
+          }}
+        >
+          <Card 
+            className="sakura-3d-card" 
+            style={{ 
+              width: 440, 
+              borderRadius: 28, 
+              padding: '10px 14px',
+            }}
+          >
+            {/* DYNAMIC SPECULAR LIGHT SHEEN */}
+            <div 
+              className="sakura-glare"
+              style={{
+                background: `radial-gradient(circle at ${cardTilt.glareX}% ${cardTilt.glareY}%, rgba(255, 240, 245, 0.28) 0%, transparent 65%)`,
+              }}
+            />
 
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '800px', height: '800px', animation: 'spin 20s linear infinite', zIndex: 3 }}>
-          <div style={{ position: 'absolute', top: '-40px', left: '50%', transform: 'translateX(-50%)' }}><Fish color="white" /></div>
-        </div>
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '600px', height: '600px', animation: 'spin 25s linear infinite reverse', zIndex: 3 }}>
-          <div style={{ position: 'absolute', top: '-30px', left: '50%', transform: 'translateX(-50%)' }}><Fish color="black" /></div>
-        </div>
+            {/* BRAND HEADER: SPRING EDITION */}
+            <div style={{ textAlign: 'center', marginBottom: 22, position: 'relative', zIndex: 3 }}>
+              {/* Sakura Blossom Icon Badge */}
+              <div style={{ 
+                width: 66, 
+                height: 66, 
+                borderRadius: 22, 
+                background: 'linear-gradient(135deg, #f43f5e 0%, #fb7185 50%, #fda4af 100%)', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                margin: '0 auto 14px', 
+                fontSize: 32,
+                boxShadow: '0 10px 28px rgba(244, 63, 94, 0.45), inset 0 0 12px rgba(255, 255, 255, 0.4)',
+                animation: 'sakuraFloat 4s ease-in-out infinite',
+              }}>
+                🌸
+              </div>
 
-        <Card className="glass-card" style={{ width: 400, borderRadius: 32, zIndex: 10 }}>
-          <div style={{ textAlign: 'center', marginBottom: 30 }}>
-            <div style={{ width: 70, height: 70, borderRadius: '50%', background: 'linear-gradient(145deg, #00f2fe, #7b2ff7)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', boxShadow: '0 10px 20px rgba(0,242,254,0.3)' }}>
-              <SafetyCertificateOutlined style={{ fontSize: 36, color: 'white' }} />
+              <div style={{ display: 'inline-block', padding: '3px 12px', borderRadius: 20, background: 'rgba(251, 113, 133, 0.15)', border: '1px solid rgba(251, 113, 133, 0.35)', marginBottom: 8 }}>
+                <span style={{ color: '#fda4af', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  🌱 Mùa vụ mới • Khởi sắc bội thu
+                </span>
+              </div>
+
+              <Title level={2} style={{ margin: 0, color: '#ffffff', fontSize: 25, fontWeight: 800, letterSpacing: '-0.02em' }}>
+                PESTICIDE <span style={{ color: '#fda4af' }}>SHOP</span>
+              </Title>
+              <Text style={{ color: '#d8b4c8', fontSize: 13, display: 'block', marginTop: 4 }}>
+                Hệ thống Quản lý Bán lẻ & Kho Nông Dược BVTV
+              </Text>
             </div>
-            <Title level={2} style={{ margin: 0, color: 'white', textShadow: '0 2px 10px rgba(0,242,254,0.5)' }}>PESTICIDE PRO</Title>
-            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, letterSpacing: '2px' }}>Hệ thống quản lý thông minh</Text>
-          </div>
 
-          <Form name="login_form" onFinish={onFinish} layout="vertical" size="large" className="glass-input">
-            
-            {/* ĐÃ SỬA: Bỏ Tooltip ra khỏi Input để Form bắt được dữ liệu */}
-            <Form.Item name="email" rules={[{ required: true, message: 'Email không được để trống' }, { type: 'email', message: 'Email không hợp lệ' }]}>
-              <Input prefix={<UserOutlined />} placeholder="admin@example.com" style={{ borderRadius: 40, height: 50, paddingLeft: 20 }} />
-            </Form.Item>
+            {/* TABS: ĐĂNG NHẬP / ĐĂNG KÝ */}
+            <div style={{ position: 'relative', zIndex: 3 }}>
+              <Tabs
+                activeKey={activeTab}
+                onChange={setActiveTab}
+                centered
+                className="sakura-tabs"
+                items={[
+                  {
+                    key: 'login',
+                    label: 'ĐĂNG NHẬP',
+                    children: (
+                      <Form 
+                        form={loginForm}
+                        name="login_form" 
+                        onFinish={onLogin} 
+                        layout="vertical" 
+                        size="large" 
+                        className="sakura-input"
+                      >
+                        <Form.Item 
+                          name="email" 
+                          rules={[
+                            { required: true, message: 'Vui lòng nhập Email!' }, 
+                            { type: 'email', message: 'Email không đúng định dạng!' }
+                          ]}
+                          style={{ marginBottom: 16 }}
+                        >
+                          <Input 
+                            prefix={<UserOutlined />} 
+                            placeholder="admin@example.com" 
+                            style={{ borderRadius: 14, height: 48, fontSize: 14 }} 
+                          />
+                        </Form.Item>
 
-            {/* ĐÃ SỬA: Bỏ Tooltip ra khỏi Input.Password để Form bắt được dữ liệu */}
-            <Form.Item name="password" rules={[{ required: true, message: 'Mật khẩu không được để trống' }]}>
-              <Input.Password prefix={<LockOutlined />} placeholder="••••••••" style={{ borderRadius: 40, height: 50, paddingLeft: 20 }} />
-            </Form.Item>
+                        <Form.Item 
+                          name="password" 
+                          rules={[{ required: true, message: 'Vui lòng nhập Mật khẩu!' }]}
+                          style={{ marginBottom: 20 }}
+                        >
+                          <Input.Password 
+                            prefix={<LockOutlined />} 
+                            placeholder="••••••••" 
+                            style={{ borderRadius: 14, height: 48, fontSize: 14 }} 
+                          />
+                        </Form.Item>
 
-            <Form.Item style={{ marginTop: 30 }}>
-              <Button
-                type="primary"
-                htmlType="submit"
-                block
-                loading={loading}
-                disabled={isLocked}
-                style={{
-                  height: 50,
-                  borderRadius: 40,
-                  background: isLocked ? '#555' : 'linear-gradient(90deg, #00f2fe, #7b2ff7)',
-                  border: 'none',
-                  fontSize: 16,
-                  fontWeight: 'bold',
-                  letterSpacing: '1px',
-                  boxShadow: isLocked ? 'none' : '0 8px 16px rgba(123,47,247,0.4)',
-                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                  cursor: isLocked ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {isLocked ? `THỬ LẠI SAU ${countdown}s` : loading ? 'ĐANG XỬ LÝ...' : 'ĐĂNG NHẬP NGAY'}
-              </Button>
-            </Form.Item>
-          </Form>
+                        <Form.Item style={{ marginBottom: 14 }}>
+                          <Button
+                            type="primary"
+                            htmlType="submit"
+                            block
+                            loading={loading}
+                            disabled={isLocked}
+                            style={{
+                              height: 48,
+                              borderRadius: 14,
+                              background: isLocked ? '#52525b' : 'linear-gradient(135deg, #e11d48 0%, #f43f5e 50%, #fb7185 100%)',
+                              border: 'none',
+                              fontSize: 15,
+                              fontWeight: 700,
+                              letterSpacing: '0.04em',
+                              boxShadow: isLocked ? 'none' : '0 8px 22px rgba(244, 63, 94, 0.42)',
+                              cursor: isLocked ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            {isLocked ? `THỬ LẠI SAU ${countdown}s` : loading ? 'ĐANG XÁC THỰC...' : '🌸 ĐĂNG NHẬP HỆ THỐNG'}
+                          </Button>
+                        </Form.Item>
 
-          <Divider style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>HOẶC</Text>
-          </Divider>
+                        <Divider style={{ borderColor: 'rgba(251, 113, 133, 0.2)', margin: '14px 0' }}>
+                          <Text style={{ color: '#d8b4c8', fontSize: 12 }}>HOẶC TIỆN LỢI HƠN VỚI</Text>
+                        </Divider>
 
-          <LoginWithFace />
+                        <LoginWithFace />
+                      </Form>
+                    ),
+                  },
+                  {
+                    key: 'register',
+                    label: 'ĐĂNG KÝ MỚI',
+                    children: (
+                      <Form 
+                        form={registerForm}
+                        name="register_form" 
+                        onFinish={onRegister} 
+                        layout="vertical" 
+                        size="large" 
+                        className="sakura-input"
+                      >
+                        <Form.Item 
+                          name="displayName" 
+                          rules={[{ required: true, message: 'Vui lòng nhập họ tên của bạn!' }]}
+                          style={{ marginBottom: 14 }}
+                        >
+                          <Input 
+                            prefix={<SmileOutlined />} 
+                            placeholder="Họ và tên nhân viên..." 
+                            style={{ borderRadius: 14, height: 46, fontSize: 14 }} 
+                          />
+                        </Form.Item>
 
-          <div style={{ marginTop: 20, textAlign: 'center' }}>
-            <Text style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>Bảo mật & Kết nối lượng tử • AI Enhanced</Text>
-          </div>
-        </Card>
+                        <Form.Item 
+                          name="email" 
+                          rules={[
+                            { required: true, message: 'Vui lòng nhập Email!' }, 
+                            { type: 'email', message: 'Email không hợp lệ!' }
+                          ]}
+                          style={{ marginBottom: 14 }}
+                        >
+                          <Input 
+                            prefix={<MailOutlined />} 
+                            placeholder="nhanvien@pesticide.com" 
+                            style={{ borderRadius: 14, height: 46, fontSize: 14 }} 
+                          />
+                        </Form.Item>
+
+                        <Form.Item 
+                          name="password" 
+                          rules={[
+                            { required: true, message: 'Vui lòng tạo mật khẩu!' },
+                            { min: 6, message: 'Mật khẩu tối thiểu 6 ký tự!' }
+                          ]}
+                          style={{ marginBottom: 14 }}
+                        >
+                          <Input.Password 
+                            prefix={<LockOutlined />} 
+                            placeholder="Mật khẩu bảo mật..." 
+                            style={{ borderRadius: 14, height: 46, fontSize: 14 }} 
+                          />
+                        </Form.Item>
+
+                        <Form.Item 
+                          name="confirmPassword" 
+                          dependencies={['password']}
+                          rules={[
+                            { required: true, message: 'Vui lòng xác nhận mật khẩu!' },
+                            ({ getFieldValue }) => ({
+                              validator(_, value) {
+                                if (!value || getFieldValue('password') === value) {
+                                  return Promise.resolve();
+                                }
+                                return Promise.reject(new Error('Mật khẩu xác nhận không khớp!'));
+                              },
+                            }),
+                          ]}
+                          style={{ marginBottom: 20 }}
+                        >
+                          <Input.Password 
+                            prefix={<CheckCircleOutlined />} 
+                            placeholder="Nhập lại mật khẩu..." 
+                            style={{ borderRadius: 14, height: 46, fontSize: 14 }} 
+                          />
+                        </Form.Item>
+
+                        <Form.Item style={{ marginBottom: 10 }}>
+                          <Button
+                            type="primary"
+                            htmlType="submit"
+                            block
+                            loading={loading}
+                            style={{
+                              height: 48,
+                              borderRadius: 14,
+                              background: 'linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%)',
+                              border: 'none',
+                              fontSize: 15,
+                              fontWeight: 700,
+                              letterSpacing: '0.04em',
+                              boxShadow: '0 8px 22px rgba(16, 185, 129, 0.4)',
+                            }}
+                          >
+                            {loading ? 'ĐANG TẠO TÀI KHOẢN...' : '🌱 TẠO TÀI KHOẢN NGAY'}
+                          </Button>
+                        </Form.Item>
+                      </Form>
+                    ),
+                  },
+                ]}
+              />
+
+              {/* FOOTER SPRING MOTIF */}
+              <div style={{ marginTop: 18, textAlign: 'center' }}>
+                <Text style={{ color: '#d8b4c8', fontSize: 11 }}>
+                  🌸 Mùa xuân sinh sôi • Tương tác chuột 3D sống động • Chuẩn FEFO
+                </Text>
+              </div>
+            </div>
+          </Card>
+        </div>
       </div>
     </>
   );
 };
 
-const Fish = ({ color }) => (
-  <svg width="60" height="40" viewBox="0 0 60 40" style={{ filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.3))' }}>
-    <defs><linearGradient id={`fishGrad-${color}`} x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor={color === 'white' ? '#fff' : '#222'} /><stop offset="100%" stopColor={color === 'white' ? '#ddd' : '#000'} /></linearGradient></defs>
-    <g style={{ animation: 'fishSwim 3s infinite ease-in-out', transformOrigin: '30px 20px' }}>
-      <ellipse cx="30" cy="20" rx="22" ry="12" fill={`url(#fishGrad-${color})`} stroke={color === 'white' ? '#000' : '#7b2ff7'} strokeWidth="1.5" />
-      <circle cx="42" cy="15" r="3" fill="white" stroke="#000" strokeWidth="1" />
-      <circle cx="44" cy="13" r="1.5" fill="black" />
-      <g style={{ animation: 'tailWag 0.4s infinite alternate', transformOrigin: '48px 20px' }}><path d="M48 12 L58 8 L58 32 L48 28 Z" fill={`url(#fishGrad-${color})`} stroke={color === 'white' ? '#000' : '#7b2ff7'} strokeWidth="1" /></g>
-      <path d="M25 5 L30 0 L35 5" stroke={color === 'white' ? '#000' : '#7b2ff7'} strokeWidth="1.5" fill="none" style={{ animation: 'finWave 0.6s infinite alternate', transformOrigin: '30px 2px' }} />
-      <path d="M25 35 L30 40 L35 35" stroke={color === 'white' ? '#000' : '#7b2ff7'} strokeWidth="1.5" fill="none" style={{ animation: 'finWave 0.6s infinite alternate', transformOrigin: '30px 38px' }} />
-    </g>
-  </svg>
-);
-
-export default Login;
+export default Login;

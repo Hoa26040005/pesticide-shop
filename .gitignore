@@ -27,3 +27,6 @@ release
 *.njsproj
 *.sln
 *.sw?
+.agents/
+skills/
+
