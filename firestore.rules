@@ -8,12 +8,11 @@ service cloud.firestore {
     }
 
     // 2. Hàm kiểm tra quyền Quản trị viên (Admin)
+    // Chỉ dựa vào trường role trong users/{uid} - không suy ra từ email
     function isAdmin() {
-      return isAuthenticated() && (
-        (request.auth.token.email != null && request.auth.token.email.matches('.*admin.*')) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN')
-      );
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
     }
 
     // 3. Quản lý Đơn hàng (Orders)
@@ -55,7 +54,10 @@ service cloud.firestore {
     // - Chỉ tài khoản Admin mới có quyền cấp phát/thay đổi quyền 'role' hoặc xóa tài khoản
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      // Tự tạo hồ sơ chỉ được phép với quyền STAFF; Admin có thể tạo hồ sơ bất kỳ
+      allow create: if isAdmin() ||
+        (isAuthenticated() && request.auth.uid == userId &&
+         request.resource.data.role == 'STAFF');
       allow update: if isAuthenticated() && (
         isAdmin() || 
         (request.auth.uid == userId && 

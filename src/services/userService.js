@@ -27,9 +27,10 @@ export const getUserRole = async (uid, email) => {
       return userSnap.data().role || 'STAFF';
     }
 
-    // Nếu chưa có bản ghi, xác định vai trò mặc định
-    const isFirstOrAdminEmail = email?.toLowerCase().includes('admin') || email === 'admin@gmail.com';
-    const defaultRole = isFirstOrAdminEmail ? 'ADMIN' : 'STAFF';
+    // Nếu chưa có bản ghi: luôn tạo với quyền STAFF.
+    // Quyền ADMIN chỉ được cấp bởi Admin hiện có (hoặc sửa trực tiếp trên Firebase Console),
+    // không suy ra từ email để tránh leo thang đặc quyền.
+    const defaultRole = 'STAFF';
 
     await setDoc(userRef, {
       uid,
@@ -42,8 +43,8 @@ export const getUserRole = async (uid, email) => {
     return defaultRole;
   } catch (error) {
     console.error("Lỗi lấy vai trò người dùng:", error);
-    // Fallback an toàn nếu lỗi mạng: nếu email có admin thì cho admin, không thì staff
-    return email?.toLowerCase().includes('admin') ? 'ADMIN' : 'STAFF';
+    // Fallback an toàn nếu lỗi mạng: luôn hạ xuống quyền thấp nhất
+    return 'STAFF';
   }
 };
 
