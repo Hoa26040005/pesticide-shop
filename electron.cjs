@@ -10,8 +10,9 @@ function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.cjs'),
     },
     autoHideMenuBar: true,
     // Sửa đuôi .svg thành .ico để Windows nhận diện đúng

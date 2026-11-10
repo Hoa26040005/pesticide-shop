@@ -52,7 +52,8 @@
     "productName": "Quan Ly Thuoc BVTV",
     "files": [
       "dist/**/*",
-      "electron.cjs"
+      "electron.cjs",
+      "preload.cjs"
     ],
     "directories": {
       "output": "release"

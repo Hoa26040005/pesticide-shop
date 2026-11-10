@@ -1,8 +1,8 @@
 export const FACE_API_CONFIG = {
-  // Cấu hình model
-  MODEL_URL: process.env.NODE_ENV === 'development' 
-    ? '/models' 
-    : process.env.PUBLIC_URL + '/models',
+  // Cấu hình model an toàn cho Vite & Electron
+  MODEL_URL: (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL)
+    ? `${import.meta.env.BASE_URL}models`.replace('//', '/')
+    : '/models',
   
   // Cấu hình detection
   DETECTION_OPTIONS: {

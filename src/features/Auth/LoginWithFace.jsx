@@ -11,6 +11,8 @@ const LoginWithFace = () => {
   const webcamRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutTime, setLockoutTime] = useState(0);
 
   const dataURLtoFile = (dataurl, filename) => {
     let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
@@ -28,6 +30,12 @@ const LoginWithFace = () => {
   };
 
   const handleScan = async () => {
+    if (lockoutTime > Date.now()) {
+      const waitSec = Math.ceil((lockoutTime - Date.now()) / 1000);
+      message.warning(`Vui lòng chờ ${waitSec}s trước khi thử lại.`);
+      return;
+    }
+
     setScanning(true);
     const imageSrc = webcamRef.current?.getScreenshot();
 
@@ -52,6 +60,7 @@ const LoginWithFace = () => {
       console.log("Kết quả Face ID:", result);
 
       if (result.success && result.token) {
+        setFailedAttempts(0);
         // Chuẩn hóa hiển thị: nếu server dùng công thức dlib cũ (50-60%), calibrate sang độ tin cậy thực tế (85-98%)
         let displayAccuracy = result.accuracy;
         if (displayAccuracy && displayAccuracy < 70) {
@@ -75,7 +84,15 @@ const LoginWithFace = () => {
         }
 
       } else {
-        message.error("Không nhận diện được: " + (result.message || "Vui lòng nhìn thẳng vào camera và thử lại"));
+        const nextAttempts = failedAttempts + 1;
+        if (nextAttempts >= 5) {
+          setLockoutTime(Date.now() + 30000);
+          setFailedAttempts(0);
+          message.error("Đã thử sai 5 lần liên tiếp. Tạm khóa quét trong 30 giây để bảo vệ!");
+        } else {
+          setFailedAttempts(nextAttempts);
+          message.error(`Không nhận diện được (${nextAttempts}/5): ` + (result.message || "Vui lòng nhìn thẳng vào camera và thử lại"));
+        }
       }
 
     } catch (error) {

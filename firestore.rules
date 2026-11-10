@@ -2,58 +2,72 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Hàm kiểm tra người dùng đã đăng nhập hệ thống
+    // 1. Hàm kiểm tra người dùng đã xác thực
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // 1. Quản lý Đơn hàng (Orders)
-    // Chỉ nhân viên/chủ cửa hàng đã đăng nhập mới được tạo, xem hoặc sửa đơn hàng
+    // 2. Hàm kiểm tra quyền Quản trị viên (Admin)
+    function isAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email != null && request.auth.token.email.matches('.*admin.*')) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN')
+      );
+    }
+
+    // 3. Quản lý Đơn hàng (Orders)
     match /orders/{orderId} {
       allow read, write: if isAuthenticated();
     }
 
-    // 2. Quản lý Sản phẩm (Products)
+    // 4. Quản lý Sản phẩm (Products)
     match /products/{productId} {
       allow read, write: if isAuthenticated();
     }
 
-    // 3. Quản lý Khách hàng & Sổ nợ (Customers & Debt)
+    // 5. Quản lý Khách hàng & Sổ nợ (Customers & Debt)
     match /customers/{customerId} {
       allow read, write: if isAuthenticated();
       
-      // Lịch sử biến động nợ (Chỉ cho phép thêm log, không cho phép xóa sửa tự do)
+      // Sổ biến động nợ: Bất biến - cấm sửa hoặc xóa lịch sử nợ
       match /debt_history/{historyId} {
         allow read, create: if isAuthenticated();
-        allow update, delete: if isAuthenticated();
+        allow update, delete: if false;
       }
     }
 
-    // 4. Quản lý Lô hàng & Kho (Inventory Batches)
+    // 6. Quản lý Lô hàng & Kho (Inventory Batches - FEFO)
     match /inventory_batches/{batchId} {
       allow read, write: if isAuthenticated();
     }
 
-    // 5. Nhật ký hệ thống (System Logs - Audit Trail)
-    // Bắt buộc đăng nhập: Chỉ cho phép đọc và thêm nhật ký mới, tuyệt đối cấm chỉnh sửa/xóa nhật ký đã ghi
+    // 7. Nhật ký hệ thống (System Logs - Audit Trail)
+    // Nghiêm cấm hoàn toàn hành vi chỉnh sửa hoặc xóa lịch sử kiểm toán
     match /system_logs/{logId} {
       allow read, create: if isAuthenticated();
       allow update, delete: if false; 
     }
 
-    // 6. Quản lý Tài khoản & Phân quyền (Users & Roles)
+    // 8. Quản lý Tài khoản & Phân quyền (Users & Roles)
+    // Phòng thủ chống leo thang quyền hạn (Privilege Escalation):
+    // - Người dùng chỉ được sửa thông tin cá nhân của mình và TUYỆT ĐỐI không được tự ý sửa trường 'role'
+    // - Chỉ tài khoản Admin mới có quyền cấp phát/thay đổi quyền 'role' hoặc xóa tài khoản
     match /users/{userId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (request.auth.uid == userId && 
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
+      );
+      allow delete: if isAdmin();
     }
 
-    // 7. Cấu hình & Thông tin tài khoản Admin (Profiles & Settings)
+    // 9. Cấu hình & Thông tin tài khoản Admin (Profiles & Settings)
     match /admin_profiles/{profileId} {
-      allow read, write: if isAuthenticated();
-    }
-
-    // 7. Quy tắc mặc định cho các tài nguyên khác
-    match /{document=**} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
   }
 }

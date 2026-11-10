@@ -1,16 +1,19 @@
 import * as faceapi from '@vladmandic/face-api';
 
-// Lấy đường dẫn đúng cho Electron và Web
-const isElectron = window && window.process && window.process.type;
-let MODEL_URL = '';
+// Lấy đường dẫn an toàn cho Electron và Web qua contextBridge
+const isElectron = typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron);
+let MODEL_URL = '/models';
 
-if (isElectron) {
-  // Trong Electron: dùng đường dẫn file://
-  const path = window.require('path');
-  MODEL_URL = path.join(__dirname, '../../public/models').replace(/\\/g, '/');
-} else {
-  // Trong Web: dùng public URL
-  MODEL_URL = '/models';
+if (isElectron && typeof window.electronAPI?.getModelsPath === 'function') {
+  try {
+    const electronPath = window.electronAPI.getModelsPath();
+    if (electronPath) {
+      MODEL_URL = 'file://' + electronPath;
+    }
+  } catch (err) {
+    console.warn('Không thể lấy đường dẫn local models Electron, fallback về /models', err);
+    MODEL_URL = '/models';
+  }
 }
 
 console.log('📁 Model URL:', MODEL_URL);
